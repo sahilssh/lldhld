@@ -26,97 +26,94 @@ A structured, battle-tested playbook for cracking **Low-Level Design (LLD / Mach
 
 ---
 
-## 📐 Part 1: LLD / Machine Coding Framework
+## 🧭 LLD Design Pattern Decision Tree
 
-### Step 1: Clarify Scope & Functional Requirements (0 - 5 min)
-* Never jump straight to coding. Clarify rules, boundaries, and what is out of scope.
-* Identify the primary actors (e.g., Customer, Admin, System, Worker).
-* Formulate 3-5 core user actions / use cases.
+When solving an LLD problem, use this decision tree to pick the right pattern:
 
-### Step 2: Define Core Entities & Relationships (5 - 15 min)
-* Identify nouns in the requirements $\rightarrow$ these become your Classes/Entities.
-* Identify verbs in the requirements $\rightarrow$ these become Methods/Behaviors.
-* Choose appropriate design patterns:
-  - Creational (Factory, Builder, Singleton)
-  - Structural (Adapter, Decorator, Facade)
-  - Behavioral (Strategy, Observer, State, Command)
-* Sketch a quick class diagram (Mermaid / Whiteboard).
-
-### Step 3: Implement Clean, Modular Code (15 - 35 min)
-* Apply **SOLID** principles:
-  - **S**: Single Responsibility Principle
-  - **O**: Open/Closed Principle (use Strategy/Polymorphism instead of large `if/else` or `switch`)
-  - **L**: Liskov Substitution Principle
-  - **I**: Interface Segregation Principle
-  - **D**: Dependency Inversion Principle (inject interfaces, not concrete classes)
-* Separate concerns:
-  1. Models / Entities
-  2. Service / Orchestrator / Controller layer
-  3. Repositories / In-memory Stores
-  4. Strategy / Factory implementations
-
-### Step 4: Concurrency, Edge Cases & Verification (35 - 45 min)
-* Identify shared mutable state:
-  - Protect critical sections using mutexes / locks / read-write locks / atomic primitives.
-  - Guard against race conditions (e.g., double booking, concurrent payments).
-* Walk through an end-to-end dry run with a simple `main()` driver script.
+```mermaid
+flowchart TD
+    Q1{"What is the primary challenge?"}
+    
+    Q1 -->|Object Creation| Creational{"How are objects created?"}
+    Creational -->|Single shared instance| Singleton["Singleton (e.g. Logger, DB Pool)"]
+    Creational -->|Subclasses pick type| Factory["Factory Method (e.g. Payment Processor)"]
+    Creational -->|Complex multi-parameter object| Builder["Builder (e.g. HTTP Request, Query Builder)"]
+    Creational -->|Family of related products| AbsFactory["Abstract Factory (e.g. Dark/Light Theme GUI)"]
+    
+    Q1 -->|Object Structure & Assembly| Structural{"How are objects composed?"}
+    Structural -->|Incompatible interface conversion| Adapter["Adapter (e.g. 3rd-party Gateway)"]
+    Structural -->|Add behaviors dynamically| Decorator["Decorator (e.g. Notification Pipeline)"]
+    Structural -->|Simplify complex subsystem| Facade["Facade (e.g. Video Transcoder)"]
+    Structural -->|Control access, caching, or lazy load| Proxy["Proxy (e.g. Caching Query Proxy)"]
+    Structural -->|Part-whole tree hierarchy| Composite["Composite (e.g. File System, Org Tree)"]
+    
+    Q1 -->|Behavior & Communication| Behavioral{"How do objects interact?"}
+    Behavioral -->|Interchangeable algorithms at runtime| Strategy["Strategy (e.g. Pricing, Route Finder)"]
+    Behavioral -->|1-to-many event notification| Observer["Observer (e.g. Pub/Sub, Price Ticker)"]
+    Behavioral -->|State machine with distinct behaviors| StatePattern["State (e.g. Vending Machine, Order State)"]
+    Behavioral -->|Pass request through filter pipeline| CoR["Chain of Responsibility (e.g. Middleware)"]
+    Behavioral -->|Encapsulate request with undo/redo| Command["Command (e.g. Text Editor, Move History)"]
+```
 
 ---
 
-## 🌐 Part 2: HLD / System Design Framework
+## 🗄️ HLD Technology Selection Matrix
 
-### Step 1: Requirements Clarification (0 - 5 min)
-* **Functional Requirements (FR)**:
-  - What does the user do? (e.g., Shorten URL, redirect, view analytics).
-  - List 3-4 primary user stories.
-* **Non-Functional Requirements (NFR)**:
-  - Latency targets (e.g., P99 < 50ms for reads, < 200ms for writes).
-  - Availability (e.g., 99.99% "four nines" $\approx$ 52 minutes downtime/year).
-  - Consistency model (Strong vs Eventual).
-  - Scale expectations (Daily Active Users, read/write ratio).
-
-### Step 2: Back-of-the-Envelope Calculations (5 - 12 min)
-* **Traffic (QPS)**:
-  $$\text{Daily Requests} = \text{DAU} \times \text{Requests per user}$$
-  $$\text{Average QPS} = \frac{\text{Daily Requests}}{86,400} \approx \frac{\text{Daily Requests}}{10^5}$$
-  $$\text{Peak QPS} = \text{Average QPS} \times 2 \text{ to } 5$$
-* **Storage**:
-  $$\text{Storage/Day} = \text{Writes/Day} \times \text{Size per record}$$
-  $$\text{Storage over 5 Years} = \text{Storage/Day} \times 365 \times 5$$
-* **Bandwidth / Memory (RAM)**:
-  - 80/20 Rule: 20% of content generates 80% of read traffic. Cache top 20% daily read volume in Redis/Memcached.
-
-### Step 3: API Design & Data Models (12 - 20 min)
-* Write explicit RESTful or gRPC endpoints:
-  - `POST /v1/urls` $\rightarrow$ `{ "longUrl": string }`
-  - `GET /{shortCode}` $\rightarrow$ HTTP 301 / 302 Redirect
-* Draft high-level database schema:
-  - Primary keys, foreign keys, secondary indexes.
-  - SQL (Relational, ACID, Complex joins) vs NoSQL (Key-Value, Document, Wide-Column, Graph).
-
-### Step 4: High-Level Architecture & End-to-End Flow (20 - 32 min)
-* Draw the client-to-storage data flow:
-  1. DNS $\rightarrow$ CDN (Cloudflare/CloudFront)
-  2. Load Balancer (Nginx / ALB with Consistent Hashing or Round Robin)
-  3. API Gateway (Rate Limiting, Auth, TLS termination)
-  4. Microservices / Stateless Application Servers
-  5. Caching Layer (Redis Cluster / Memcached)
-  6. Persistence Layer (Master-Replica DB, Sharded clusters)
-  7. Async Processing (Kafka / RabbitMQ + Workers)
-
-### Step 5: Deep Dives, Bottlenecks & Resilience (32 - 45 min)
-* Address failure modes:
-  - What happens if the primary database dies? (Automated failover, replica promotion).
-  - What happens if Redis crashes? (Cache stampede mitigation, circuit breakers).
-  - Network partitions? (CAP theorem trade-offs).
-* Data Partitioning / Sharding strategy (Hash-based vs Range-based, Consistent Hashing).
-* Observability: Distributed tracing (OpenTelemetry/Jaeger), Metrics (Prometheus), Logs (ELK).
+| Workload / Use Case | Recommended Storage / Tech | Rationale & Trade-offs |
+|---|---|---|
+| **ACID Transactions, Financial Ledgers** | PostgreSQL, MySQL, CockroachDB | Strong consistency, foreign keys, row-level locking. |
+| **High-Throughput Append Logs, Chat History** | ScyllaDB, Apache Cassandra | Wide-column, linear write scaling, partition key + timeuuid clustering. |
+| **Sub-Millisecond In-Memory Caching, Rate Limiting** | Redis, Dragonfly, Memcached | In-memory key-value, atomic Lua scripts, TTL expiration. |
+| **Hierarchical Nested Data, Catalogs** | MongoDB, Couchbase | Document store, flexible BSON schemas, fast single-doc reads. |
+| **Complex Relationship Traversal (Friends of Friends)** | Neo4j, Amazon Neptune | Graph DB, index-free adjacency ($O(1)$ edge pointer traversal). |
+| **High-Volume Time-Series Metrics & Logs** | VictoriaMetrics, M3DB, ClickHouse | Columnar/TSDB, Gorilla delta-of-delta compression, high write ingestion. |
+| **Full-Text Ranked Search & Filtering** | Elasticsearch, OpenSearch | Inverted Index, BM25 scoring, term dictionary FST, roaring bitmaps. |
+| **Distributed Asynchronous Event Streaming** | Apache Kafka, Apache Pulsar | Ordered partition logs, replayable offset consumer groups. |
 
 ---
 
-## 🧮 Numbers Every System Designer Must Know
+## 📅 30-Day LLD & HLD Mastery Roadmap
 
-### Latency Numbers (Jeff Dean Cheat Sheet)
+```
+Week 1: Foundations & OOP
+├── Day 1-2: Master SOLID Principles (Write bad vs good refactored code).
+├── Day 3-4: Creational & Structural Design Patterns (Factory, Builder, Adapter, Decorator).
+├── Day 5-6: Behavioral Patterns (Strategy, Observer, State, Chain of Responsibility).
+└── Day 7: Concurrency basics (Mutexes, RWLocks, Deadlock prevention, Producer-Consumer).
+
+Week 2: Machine Coding Drill (LLD)
+├── Day 8: Parking Lot System (Multi-floor, vehicle types, pricing strategies).
+├── Day 9: Rate Limiter (Token Bucket & Sliding Window Counter).
+├── Day 10: LRU Cache (Hash Map + Doubly Linked List from scratch).
+├── Day 11: Splitwise (Equal/Exact/Percent splits & debt simplification graph algorithm).
+├── Day 12: Vending Machine (State pattern implementation).
+├── Day 13: In-Memory File System (Trie / Composite).
+└── Day 14: Review, run test suites (`python3 tests/run_all.py`), timing drills.
+
+Week 3: Distributed Systems Foundations (HLD)
+├── Day 15: Scalability, Availability (Active-Active, SLAs, SLOs).
+├── Day 16: Caching strategies (Cache-Aside, Write-Back, Stampede, Bloom Filters).
+├── Day 17: Database internals (B+ Tree vs LSM Tree, Sharding, Replication, CAP & PACELC).
+├── Day 18: Networking & Proxies (HTTP/2, HTTP/3, WebSockets, gRPC, Consistent Hashing).
+├── Day 19: Message Queues & Distributed Transactions (Kafka, 2PC vs Saga).
+├── Day 20: Security, Authentication (JWT vs Sessions, OAuth2, PKCE, mTLS).
+└── Day 21: Consensus & Distributed Locks (Raft, ZooKeeper vs Redlock, Fencing Tokens).
+
+Week 4: High-Level System Design Architectures
+├── Day 22: URL Shortener (TinyURL) & Distributed Rate Limiter.
+├── Day 23: Real-Time Chat System (WhatsApp / Slack).
+├── Day 24: Video Streaming Platform (Netflix / YouTube).
+├── Day 25: Ride-Sharing Service (Uber / Lyft with H3 Hexagonal Grid).
+├── Day 26: Distributed Web Crawler (Google / Bing with URL Frontier & SimHash).
+├── Day 27: Multi-Channel Notification System (Priority queues, DLQ).
+├── Day 28: E-Commerce Flash Sale System (Redis Lua atomic stock decrement).
+├── Day 29: Distributed Search Engine (Elasticsearch Inverted Index & Scatter-Gather).
+└── Day 30: Full 45-minute mock interview simulations on whiteboard.
+```
+
+---
+
+## 🧮 Latency Numbers Every System Designer Must Know
 
 | Operation | Latency (approx) | Real-world Equivalent |
 |---|---|---|
@@ -132,16 +129,6 @@ A structured, battle-tested playbook for cracking **Low-Level Design (LLD / Mach
 | HDD Random Seek | 10,000,000 ns (10 ms) | 20x slower than SSD |
 | Read 1 MB sequentially from HDD | 20,000,000 ns (20 ms) | |
 | Cross-continent RTT (CA $\rightarrow$ NL) | 150,000,000 ns (150 ms) | Easily noticeable |
-
-### Storage & Data Sizing Multipliers
-
-| Unit | Decimal (SI) | Binary (IEC) | Approximate Bits / Bytes |
-|---|---|---|---|
-| **1 KB / KiB** | $10^3$ bytes | $2^{10} = 1,024$ bytes | $\approx 1$ thousand bytes |
-| **1 MB / MiB** | $10^6$ bytes | $2^{20} \approx 1.05 \times 10^6$ bytes | $\approx 1$ million bytes |
-| **1 GB / GiB** | $10^9$ bytes | $2^{30} \approx 1.07 \times 10^9$ bytes | $\approx 1$ billion bytes |
-| **1 TB / TiB** | $10^{12}$ bytes | $2^{40} \approx 1.1 \times 10^{12}$ bytes | $\approx 1$ trillion bytes |
-| **1 PB / PiB** | $10^{15}$ bytes | $2^{50} \approx 1.13 \times 10^{15}$ bytes | $\approx 1$ quadrillion bytes |
 
 ---
 
